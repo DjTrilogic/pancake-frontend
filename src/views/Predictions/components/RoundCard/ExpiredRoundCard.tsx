@@ -1,22 +1,27 @@
-import React from 'react'
 import styled from 'styled-components'
-import { Box, BlockIcon, CardBody } from '@pancakeswap/uikit'
+import { Card, Box, BlockIcon, CardBody } from '@pancakeswap/uikit'
 import { useTranslation } from 'contexts/Localization'
-import { Round, BetPosition } from 'state/types'
+import { NodeRound, BetPosition, NodeLedger } from 'state/types'
+import { useGetBufferSeconds } from 'state/predictions/hooks'
+import useTheme from 'hooks/useTheme'
+import { getHasRoundFailed, getRoundPosition } from '../../helpers'
 import { RoundResult } from '../RoundResult'
 import MultiplierArrow from './MultiplierArrow'
-import Card from './Card'
-import CardHeader from './CardHeader'
+import CardHeader, { getBorderBackground } from './CardHeader'
 import CollectWinningsOverlay from './CollectWinningsOverlay'
 import CanceledRoundCard from './CanceledRoundCard'
+import CalculatingCard from './CalculatingCard'
 
 interface ExpiredRoundCardProps {
-  round: Round
-  betAmount?: number
+  round: NodeRound
+  betAmount?: NodeLedger['amount']
   hasEnteredUp: boolean
   hasEnteredDown: boolean
-  bullMultiplier: number
-  bearMultiplier: number
+  hasClaimedUp: boolean
+  hasClaimedDown: boolean
+  bullMultiplier: string
+  bearMultiplier: string
+  isActive?: boolean
 }
 
 const StyledExpiredRoundCard = styled(Card)`
@@ -33,48 +38,66 @@ const ExpiredRoundCard: React.FC<ExpiredRoundCardProps> = ({
   betAmount,
   hasEnteredUp,
   hasEnteredDown,
+  hasClaimedUp,
+  hasClaimedDown,
   bullMultiplier,
   bearMultiplier,
+  isActive,
 }) => {
   const { t } = useTranslation()
-  const { id, endBlock, lockPrice, closePrice, bearAmount, bullAmount } = round
-  const betPosition = closePrice > lockPrice ? BetPosition.BULL : BetPosition.BEAR
-  const hasEntered = hasEnteredUp || hasEnteredDown
+  const { theme } = useTheme()
+  const { epoch, lockPrice, closePrice } = round
+  const betPosition = getRoundPosition(lockPrice, closePrice)
+  const bufferSeconds = useGetBufferSeconds()
+  const hasRoundFailed = getHasRoundFailed(round, bufferSeconds)
 
-  if (round.failed) {
+  if (hasRoundFailed) {
     return <CanceledRoundCard round={round} />
   }
 
+  if (!closePrice) {
+    return <CalculatingCard round={round} hasEnteredDown={hasEnteredDown} hasEnteredUp={hasEnteredUp} />
+  }
+
+  const cardProps = isActive
+    ? {
+        isActive,
+      }
+    : {
+        borderBackground: getBorderBackground(theme, 'expired'),
+      }
+
   return (
     <Box position="relative">
-      <StyledExpiredRoundCard>
+      <StyledExpiredRoundCard {...cardProps}>
         <CardHeader
           status="expired"
           icon={<BlockIcon mr="4px" width="21px" color="textDisabled" />}
           title={t('Expired')}
-          blockNumber={endBlock}
           epoch={round.epoch}
         />
         <CardBody p="16px" style={{ position: 'relative' }}>
           <MultiplierArrow
-            totalAmount={bullAmount}
             betAmount={betAmount}
             multiplier={bullMultiplier}
             isActive={betPosition === BetPosition.BULL}
             hasEntered={hasEnteredUp}
+            hasClaimed={hasClaimedUp}
+            isHouse={betPosition === BetPosition.HOUSE}
           />
-          <RoundResult round={round} />
+          <RoundResult round={round} hasFailed={hasRoundFailed} />
           <MultiplierArrow
-            totalAmount={bearAmount}
             betAmount={betAmount}
             multiplier={bearMultiplier}
             betPosition={BetPosition.BEAR}
             isActive={betPosition === BetPosition.BEAR}
             hasEntered={hasEnteredDown}
+            hasClaimed={hasClaimedDown}
+            isHouse={betPosition === BetPosition.HOUSE}
           />
         </CardBody>
       </StyledExpiredRoundCard>
-      <CollectWinningsOverlay roundId={id} hasEntered={hasEntered} isBottom={hasEnteredDown} />
+      <CollectWinningsOverlay epoch={epoch} isBottom={hasEnteredDown} />
     </Box>
   )
 }

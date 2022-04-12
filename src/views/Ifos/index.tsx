@@ -1,37 +1,33 @@
-import React from 'react'
-import { Route, useRouteMatch, Link } from 'react-router-dom'
-import { ButtonMenu, ButtonMenuItem, Flex } from '@pancakeswap/uikit'
-import Container from 'components/layout/Container'
+import { SubMenuItems } from '@pancakeswap/uikit'
+import { useTranslation } from 'contexts/Localization'
+import { PageMeta } from 'components/Layout/Page'
+import { useRouter } from 'next/router'
+import { useFetchIfoPool } from 'state/pools/hooks'
 import Hero from './components/Hero'
-import CurrentIfo from './CurrentIfo'
-import PastIfo from './PastIfo'
 
-const Ifos = () => {
-  const { path, url, isExact } = useRouteMatch()
-
+export const IfoPageLayout = ({ children }) => {
+  const { t } = useTranslation()
+  const router = useRouter()
+  const isExact = router.route === '/ifo'
+  useFetchIfoPool()
   return (
     <>
+      <PageMeta />
+      <SubMenuItems
+        items={[
+          {
+            label: t('Latest'),
+            href: '/ifo',
+          },
+          {
+            label: t('Finished'),
+            href: '/ifo/history',
+          },
+        ]}
+        activeItem={isExact ? '/ifo' : '/ifo/history'}
+      />
       <Hero />
-      <Container>
-        <Flex justifyContent="center" alignItems="center" mb="32px">
-          <ButtonMenu activeIndex={!isExact ? 1 : 0} scale="sm" variant="subtle">
-            <ButtonMenuItem as={Link} to={`${url}`}>
-              Next IFO
-            </ButtonMenuItem>
-            <ButtonMenuItem as={Link} to={`${url}/history`}>
-              Past IFOs
-            </ButtonMenuItem>
-          </ButtonMenu>
-        </Flex>
-        <Route exact path={`${path}`}>
-          <CurrentIfo />
-        </Route>
-        <Route path={`${path}/history`}>
-          <PastIfo />
-        </Route>
-      </Container>
+      {children}
     </>
   )
 }
-
-export default Ifos

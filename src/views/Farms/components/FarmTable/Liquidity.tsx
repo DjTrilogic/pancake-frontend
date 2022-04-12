@@ -1,4 +1,3 @@
-import React from 'react'
 import styled from 'styled-components'
 import { HelpIcon, Text, Skeleton, useTooltip } from '@pancakeswap/uikit'
 import { useTranslation } from 'contexts/Localization'
@@ -30,14 +29,15 @@ const Container = styled.div`
 `
 
 const Liquidity: React.FunctionComponent<LiquidityProps> = ({ liquidity }) => {
-  const displayLiquidity = liquidity ? (
-    `$${Number(liquidity).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-  ) : (
-    <Skeleton width={60} />
-  )
+  const displayLiquidity =
+    liquidity && liquidity.gt(0) ? (
+      `$${Number(liquidity).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+    ) : (
+      <Skeleton width={60} />
+    )
   const { t } = useTranslation()
   const { targetRef, tooltip, tooltipVisible } = useTooltip(
-    t('The total value of the funds in this farm’s liquidity pool'),
+    t('Total value of the funds in this farm’s liquidity pool'),
     { placement: 'top-end', tooltipOffset: [20, 10] },
   )
 

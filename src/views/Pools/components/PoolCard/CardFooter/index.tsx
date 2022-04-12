@@ -1,18 +1,17 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import BigNumber from 'bignumber.js'
 import styled from 'styled-components'
 import { useTranslation } from 'contexts/Localization'
-import { Flex, CardFooter, ExpandableLabel, HelpIcon, useTooltip, Box } from '@pancakeswap/uikit'
-import { Pool } from 'state/types'
+import { Flex, CardFooter, ExpandableLabel, HelpIcon, useTooltip } from '@pancakeswap/uikit'
+import { DeserializedPool } from 'state/types'
 import { CompoundingPoolTag, ManualPoolTag } from 'components/Tags'
 import ExpandedFooter from './ExpandedFooter'
 
 interface FooterProps {
-  pool: Pool
+  pool: DeserializedPool
   account: string
-  performanceFee?: number
-  isAutoVault?: boolean
   totalCakeInVault?: BigNumber
+  defaultExpanded?: boolean
 }
 
 const ExpandableButtonWrapper = styled(Flex)`
@@ -23,48 +22,35 @@ const ExpandableButtonWrapper = styled(Flex)`
   }
 `
 
-const Footer: React.FC<FooterProps> = ({
-  pool,
-  account,
-  performanceFee = 0,
-  isAutoVault = false,
-  totalCakeInVault,
-}) => {
+const Footer: React.FC<FooterProps> = ({ pool, account, defaultExpanded }) => {
+  const { vaultKey } = pool
   const { t } = useTranslation()
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded || false)
 
   const manualTooltipText = t('You must harvest and compound your earnings from this pool manually.')
   const autoTooltipText = t(
     'Any funds you stake in this pool will be automagically harvested and restaked (compounded) for you.',
   )
 
-  const { targetRef, tooltip, tooltipVisible } = useTooltip(isAutoVault ? autoTooltipText : manualTooltipText, {
-    placement: 'bottom-end',
+  const { targetRef, tooltip, tooltipVisible } = useTooltip(vaultKey ? autoTooltipText : manualTooltipText, {
+    placement: 'bottom',
   })
 
   return (
     <CardFooter>
       <ExpandableButtonWrapper>
         <Flex alignItems="center">
-          {isAutoVault ? <CompoundingPoolTag /> : <ManualPoolTag />}
+          {vaultKey ? <CompoundingPoolTag /> : <ManualPoolTag />}
           {tooltipVisible && tooltip}
-          <Box ref={targetRef}>
+          <Flex ref={targetRef}>
             <HelpIcon ml="4px" width="20px" height="20px" color="textSubtle" />
-          </Box>
+          </Flex>
         </Flex>
         <ExpandableLabel expanded={isExpanded} onClick={() => setIsExpanded(!isExpanded)}>
           {isExpanded ? t('Hide') : t('Details')}
         </ExpandableLabel>
       </ExpandableButtonWrapper>
-      {isExpanded && (
-        <ExpandedFooter
-          pool={pool}
-          account={account}
-          performanceFee={performanceFee}
-          isAutoVault={isAutoVault}
-          totalCakeInVault={totalCakeInVault}
-        />
-      )}
+      {isExpanded && <ExpandedFooter pool={pool} account={account} />}
     </CardFooter>
   )
 }

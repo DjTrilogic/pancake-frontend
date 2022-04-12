@@ -1,7 +1,9 @@
-import React from 'react'
-import { Flex, Text, Heading, Link } from '@pancakeswap/uikit'
+import { useWeb3React } from '@web3-react/core'
+import { Flex, Text, Heading } from '@pancakeswap/uikit'
 import styled from 'styled-components'
 import { useTranslation } from 'contexts/Localization'
+import Link from 'next/link'
+import { nftsBaseUrl } from 'views/Nft/market/constants'
 import HowToCard from './HowToCard'
 
 const StyledLink = styled(Link)`
@@ -11,29 +13,35 @@ const StyledLink = styled(Link)`
 
 const HowToJoin = () => {
   const { t } = useTranslation()
+  const { account } = useWeb3React()
 
   return (
     <Flex flexDirection="column" maxWidth="736px">
-      <Heading color="secondary" size="lg" mb="32px" textAlign="center">
+      <Heading color="secondary" scale="lg" mb="32px" textAlign="center">
         {t('How Can I Join?')}
       </Heading>
       <HowToCard number={1} title={t('Get Ready')}>
         <Text fontSize="14px" color="textSubtle">
-          {t('Set up your')} <StyledLink href="/profile">{t('Pancake Profile')}</StyledLink>
+          {t('Set up your')}{' '}
+          {account ? (
+            <StyledLink href={`${nftsBaseUrl}/profile/${account.toLowerCase()}`}>{t('Pancake Profile')}</StyledLink>
+          ) : (
+            t('Pancake Profile')
+          )}
           {', '}
-          {t('then register for the competition by clicking the “I WANT TO BATTLE” button above.')}
+          {t('then register for the competition by clicking “I WANT TO BATTLE” button above.')}
         </Text>
       </HowToCard>
       <HowToCard number={2} title={t('Battle Time')}>
         <Text fontSize="14px" color="textSubtle">
           {t(
-            'Trade BNB/BUSD, CAKE/BNB, ETH/BNB and BTCB/BNB during the battle period to raise both your and your team’s score. See the Rules section below for more.',
+            'Trade MBOX/BNB, MBOX/BUSD, CAKE/BNB and CAKE/BUSD during the battle period to raise both your and your team’s score. See the Rules section below for more.',
           )}
         </Text>
       </HowToCard>
       <HowToCard number={3} title={t('Prize Claim')}>
         <Text fontSize="14px" color="textSubtle">
-          {t('Teams and traders will be ranked in order of trading volume. Collect your prizes and celebrate!')}
+          {t('Teams and traders will be ranked in the order of trading volume. Collect your prizes and celebrate!')}
         </Text>
       </HowToCard>
     </Flex>

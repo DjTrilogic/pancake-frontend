@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Card,
   CardFooter,
@@ -27,7 +27,7 @@ const TopTradersCard: React.FC<TeamRanksProps> = ({
   const [isExpanded, setIsExpanded] = useState(false)
   const [topTradersGridData, setTopTradersGridData] = useState(null)
   const handleItemClick = (index: number) => setActiveTab(index)
-  const tabs = [`${t('Total')}`, 'Storm', 'Flippers', 'Cakers']
+  const tabs = [t('Total'), 'Storm', 'Flippers', 'Cakers']
 
   useEffect(() => {
     const getData = () => {
@@ -61,14 +61,14 @@ const TopTradersCard: React.FC<TeamRanksProps> = ({
   ])
 
   return (
-    <Card>
+    <Card id="top-traders-card">
       <Box width="100%">
         <CardHeader>
-          <Heading color="secondary" size="lg">
+          <Heading color="secondary" scale="lg">
             {t('Top Traders')}
           </Heading>
           <Text fontSize="14px" color="textSubtle">
-            {t('Since start of competition')}
+            {t('Since start of the competition')}
           </Text>
         </CardHeader>
         <Box mt="16px">

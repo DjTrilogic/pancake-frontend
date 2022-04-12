@@ -1,4 +1,3 @@
-import React from 'react'
 import styled from 'styled-components'
 import {
   Card,
@@ -13,7 +12,8 @@ import {
 } from '@pancakeswap/uikit'
 import useAuth from 'hooks/useAuth'
 import { useTranslation } from 'contexts/Localization'
-import { FINISHED, OVER } from 'config/constants/trading-competition/easterPhases'
+import { FINISHED, OVER } from 'config/constants/trading-competition/phases'
+import { useRouter } from 'next/router'
 import RegisterModal from '../RegisterModal'
 import ClaimModal from '../ClaimModal'
 import { Heading2Text } from '../CompetitionHeadingText'
@@ -22,6 +22,10 @@ import { CompetitionProps } from '../../types'
 const StyledCard = styled(Card)`
   display: inline-flex;
   background: linear-gradient(180deg, #7645d9 0%, #452a7a 100%);
+
+  > div {
+    background: transparent;
+  }
 
   svg {
     margin-bottom: 6px;
@@ -61,9 +65,10 @@ const BattleCta: React.FC<CompetitionProps> = ({
   onRegisterSuccess,
   onClaimSuccess,
 }) => {
+  const router = useRouter()
   const { t } = useTranslation()
   const { login, logout } = useAuth()
-  const { onPresentConnectModal } = useWalletModal(login, logout)
+  const { onPresentConnectModal } = useWalletModal(login, logout, t)
   const [onPresentRegisterModal] = useModal(
     <RegisterModal profile={profile} onRegisterSuccess={onRegisterSuccess} />,
     false,
@@ -103,7 +108,7 @@ const BattleCta: React.FC<CompetitionProps> = ({
   const getButtonText = () => {
     // No wallet connected
     if (!account) {
-      return t('Unlock Wallet')
+      return t('Connect Wallet')
     }
     // User not registered
     if (!hasRegistered) {
@@ -162,7 +167,7 @@ const BattleCta: React.FC<CompetitionProps> = ({
     }
     // Registered and competition is live
     if (hasRegistered && isCompetitionLive) {
-      window.location.href = 'https://exchange.pancakeswap.finance/#/swap'
+      router.push('/swap')
     }
     // Registered and competition has finished
     if (hasRegistered && hasCompetitionEnded) {

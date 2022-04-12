@@ -1,86 +1,71 @@
-import { useEffect, useState } from 'react'
-import BigNumber from 'bignumber.js'
 import { useWeb3React } from '@web3-react/core'
-import { getBep20Contract, getCakeContract } from 'utils/contractHelpers'
+import BigNumber from 'bignumber.js'
+import tokens from 'config/constants/tokens'
+import { FAST_INTERVAL, SLOW_INTERVAL } from 'config/constants'
+import { BigNumber as EthersBigNumber } from '@ethersproject/bignumber'
+import { Zero } from '@ethersproject/constants'
+import useSWR from 'swr'
 import { BIG_ZERO } from 'utils/bigNumber'
-import useWeb3 from './useWeb3'
-import useRefresh from './useRefresh'
-import useLastUpdated from './useLastUpdated'
+import { simpleRpcProvider } from 'utils/providers'
+import { useCake, useTokenContract } from './useContract'
+import { useSWRContract } from './useSWRContract'
 
 const useTokenBalance = (tokenAddress: string) => {
-  const [balance, setBalance] = useState(BIG_ZERO)
   const { account } = useWeb3React()
-  const web3 = useWeb3()
-  const { fastRefresh } = useRefresh()
 
-  useEffect(() => {
-    const fetchBalance = async () => {
-      const contract = getBep20Contract(tokenAddress, web3)
-      const res = await contract.methods.balanceOf(account).call()
-      setBalance(new BigNumber(res))
-    }
+  const contract = useTokenContract(tokenAddress, false)
+  const { data, status, ...rest } = useSWRContract(
+    account
+      ? {
+          contract,
+          methodName: 'balanceOf',
+          params: [account],
+        }
+      : null,
+    {
+      refreshInterval: FAST_INTERVAL,
+    },
+  )
 
-    if (account) {
-      fetchBalance()
-    }
-  }, [account, tokenAddress, web3, fastRefresh])
-
-  return balance
+  return {
+    ...rest,
+    fetchStatus: status,
+    balance: data ? new BigNumber(data.toString()) : BIG_ZERO,
+  }
 }
 
 export const useTotalSupply = () => {
-  const { slowRefresh } = useRefresh()
-  const [totalSupply, setTotalSupply] = useState<BigNumber>()
+  const { reader: cakeContract } = useCake()
+  const { data } = useSWRContract([cakeContract, 'totalSupply'], {
+    refreshInterval: SLOW_INTERVAL,
+  })
 
-  useEffect(() => {
-    async function fetchTotalSupply() {
-      const cakeContract = getCakeContract()
-      const supply = await cakeContract.methods.totalSupply().call()
-      setTotalSupply(new BigNumber(supply))
-    }
-
-    fetchTotalSupply()
-  }, [slowRefresh])
-
-  return totalSupply
+  return data ? new BigNumber(data.toString()) : null
 }
 
 export const useBurnedBalance = (tokenAddress: string) => {
-  const [balance, setBalance] = useState(BIG_ZERO)
-  const { slowRefresh } = useRefresh()
-  const web3 = useWeb3()
+  const contract = useTokenContract(tokenAddress, false)
+  const { data } = useSWRContract([contract, 'balanceOf', ['0x000000000000000000000000000000000000dEaD']], {
+    refreshInterval: SLOW_INTERVAL,
+  })
 
-  useEffect(() => {
-    const fetchBalance = async () => {
-      const contract = getBep20Contract(tokenAddress, web3)
-      const res = await contract.methods.balanceOf('0x000000000000000000000000000000000000dEaD').call()
-      setBalance(new BigNumber(res))
-    }
-
-    fetchBalance()
-  }, [web3, tokenAddress, slowRefresh])
-
-  return balance
+  return data ? new BigNumber(data.toString()) : BIG_ZERO
 }
 
 export const useGetBnbBalance = () => {
-  const [balance, setBalance] = useState(BIG_ZERO)
   const { account } = useWeb3React()
-  const { lastUpdated, setLastUpdated } = useLastUpdated()
-  const web3 = useWeb3()
+  const { status, data, mutate } = useSWR([account, 'bnbBalance'], async () => {
+    return simpleRpcProvider.getBalance(account)
+  })
 
-  useEffect(() => {
-    const fetchBalance = async () => {
-      const walletBalance = await web3.eth.getBalance(account)
-      setBalance(new BigNumber(walletBalance))
-    }
+  return { balance: data || Zero, fetchStatus: status, refresh: mutate }
+}
 
-    if (account) {
-      fetchBalance()
-    }
-  }, [account, web3, lastUpdated, setBalance])
+export const useGetCakeBalance = () => {
+  const { balance, fetchStatus } = useTokenBalance(tokens.cake.address)
 
-  return { balance, refresh: setLastUpdated }
+  // TODO: Remove ethers conversion once useTokenBalance is converted to ethers.BigNumber
+  return { balance: EthersBigNumber.from(balance.toString()), fetchStatus }
 }
 
 export default useTokenBalance

@@ -1,4 +1,3 @@
-import React from 'react'
 import styled from 'styled-components'
 import { Card, CardHeader, Box, Heading, Text } from '@pancakeswap/uikit'
 import { useTranslation } from 'contexts/Localization'
@@ -17,7 +16,7 @@ const PrizesCard = () => {
   return (
     <StyledCard>
       <CardHeader>
-        <Heading size="lg" color="secondary">
+        <Heading scale="lg" color="secondary">
           {t('Prizes by Team')}
         </Heading>
         <Text color="textSubtle" fontSize="14px">
@@ -28,7 +27,10 @@ const PrizesCard = () => {
       <Box p="24px">
         <Text color="textSubtle" fontSize="14px">
           {t(
-            'Prizes to be distributed in CAKE and shared by all members of a tier. CAKE price in USD to be determined on the day of distribution. Details below.',
+            'Prizes to be distributed in CAKE and MBOX in a distribution of 1:1 and shared by all members of each respective tier.',
+          )}{' '}
+          {t(
+            'The price of token prizes (CAKE and MBOX) in USD will be determined as per their BUSD pair price during the tally period.',
           )}
         </Text>
       </Box>

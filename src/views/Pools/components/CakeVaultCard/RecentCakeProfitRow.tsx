@@ -1,36 +1,32 @@
-import React from 'react'
-import BigNumber from 'bignumber.js'
 import { Flex, Text } from '@pancakeswap/uikit'
-import { useTranslation } from 'contexts/Localization'
 import { useWeb3React } from '@web3-react/core'
+import { useTranslation } from 'contexts/Localization'
+import { usePriceCakeBusd } from 'state/farms/hooks'
+import { useVaultPoolByKey } from 'state/pools/hooks'
+import { DeserializedPool } from 'state/types'
+import { getCakeVaultEarnings } from 'views/Pools/helpers'
 import RecentCakeProfitBalance from './RecentCakeProfitBalance'
 
-interface RecentCakeProfitRowProps {
-  cakeAtLastUserAction: BigNumber
-  userShares: BigNumber
-  pricePerFullShare: BigNumber
-}
-
-const RecentCakeProfitCountdownRow: React.FC<RecentCakeProfitRowProps> = ({
-  cakeAtLastUserAction,
-  userShares,
-  pricePerFullShare,
-}) => {
+const RecentCakeProfitCountdownRow = ({ pool }: { pool: DeserializedPool }) => {
   const { t } = useTranslation()
   const { account } = useWeb3React()
-  const shouldDisplayCakeProfit =
-    account && cakeAtLastUserAction && cakeAtLastUserAction.gt(0) && userShares && userShares.gt(0)
+  const {
+    pricePerFullShare,
+    userData: { cakeAtLastUserAction, userShares },
+  } = useVaultPoolByKey(pool.vaultKey)
+  const cakePriceBusd = usePriceCakeBusd()
+  const { hasAutoEarnings, autoCakeToDisplay } = getCakeVaultEarnings(
+    account,
+    cakeAtLastUserAction,
+    userShares,
+    pricePerFullShare,
+    cakePriceBusd.toNumber(),
+  )
 
   return (
     <Flex alignItems="center" justifyContent="space-between">
-      <Text fontSize="14px">{t('Recent CAKE profit:')}</Text>
-      {shouldDisplayCakeProfit && (
-        <RecentCakeProfitBalance
-          cakeAtLastUserAction={cakeAtLastUserAction}
-          userShares={userShares}
-          pricePerFullShare={pricePerFullShare}
-        />
-      )}
+      <Text fontSize="14px">{`${t('Recent CAKE profit')}:`}</Text>
+      {hasAutoEarnings && <RecentCakeProfitBalance cakeToDisplay={autoCakeToDisplay} pool={pool} account={account} />}
     </Flex>
   )
 }

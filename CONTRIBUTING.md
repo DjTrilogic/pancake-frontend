@@ -5,20 +5,11 @@ You can start by reading our [Contribution guidelines](https://docs.pancakeswap.
 
 ## Setup
 
-Create a `.env.development.local` file at the root of the project. Add the following lines inside :
-
-```
-REACT_APP_CROWDIN_APIKEY = ""
-REACT_APP_CROWDIN_PROJECTID = ""
-```
-
-You'll need this in order to get the i18n system to work. Contact a dev if you need these values.
-
 Install the dependencies
 
 ```shell
 yarn
-yarn start
+yarn dev
 ```
 
 Don't forget to setup your IDE with `eslint` and `prettier`.
@@ -32,40 +23,11 @@ Don't forget to setup your IDE with `eslint` and `prettier`.
 - **context** contains global contexts (separated from the redux store)
 - **hooks** contains generic hooks.
 - **utils** contains generic utilities functions.
+- **pages** contains page components for next.js
 
 ## Tests
 
 Run tests with `yarn test`.
-
-## Localisation
-
-_In order for the Crowdin API queries to work - you will need `REACT_APP_CROWDIN_APIKEY` & `REACT_APP_CROWDIN_PROJECTID` env variables set in your root `.env.development.local` file_
-
-### Adding translations
-
-A hook expose the function you need to translate content.
-
-```
-import { useTranslation } from 'contexts/Localization'
-
-...
-const { t } =  useTranslation()
-...
-
-t(id, 'fallback', data)
-```
-
-- **id** is the crowdin id of the string you want to translate.
-- **fallback** is a string fallback used if the id cannot be found.
-- **data** dynamic variables
-
-#### Dynamic variables Example
-
-If a Crowdin translation like this `You have %num% left in your wallet` - would look something like:
-
-```
-t(675, `You have ${cakeBalance} left in your wallet`, { num: cakeBalance })
-```
 
 ## Issue reports
 

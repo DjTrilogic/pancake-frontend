@@ -1,27 +1,29 @@
 import BigNumber from 'bignumber.js'
-import React from 'react'
+
 import styled from 'styled-components'
 import { BIG_ZERO } from 'utils/bigNumber'
 import { Flex, Text, Box } from '@pancakeswap/uikit'
 import { useTranslation } from 'contexts/Localization'
 import { PoolCategory } from 'config/constants/types'
-import { Pool } from 'state/types'
+import { useProfileRequirement } from 'views/Pools/hooks/useProfileRequirement'
+import { DeserializedPool } from 'state/types'
 import ApprovalAction from './ApprovalAction'
 import StakeActions from './StakeActions'
 import HarvestActions from './HarvestActions'
+import { ProfileRequirementWarning } from '../../ProfileRequirementWarning'
 
 const InlineText = styled(Text)`
   display: inline;
 `
 
 interface CardActionsProps {
-  pool: Pool
+  pool: DeserializedPool
   stakedBalance: BigNumber
-  stakingTokenPrice: number
 }
 
-const CardActions: React.FC<CardActionsProps> = ({ pool, stakedBalance, stakingTokenPrice }) => {
-  const { sousId, stakingToken, earningToken, harvest, poolCategory, userData } = pool
+const CardActions: React.FC<CardActionsProps> = ({ pool, stakedBalance }) => {
+  const { sousId, stakingToken, earningToken, harvest, poolCategory, userData, earningTokenPrice, profileRequirement } =
+    pool
   // Pools using native BNB behave differently than pools using a token
   const isBnbPool = poolCategory === PoolCategory.BINANCE
   const { t } = useTranslation()
@@ -31,6 +33,8 @@ const CardActions: React.FC<CardActionsProps> = ({ pool, stakedBalance, stakingT
   const needsApproval = !allowance.gt(0) && !isBnbPool
   const isStaked = stakedBalance.gt(0)
   const isLoading = !userData
+
+  const { notMeetRequired, notMeetThreshold } = useProfileRequirement(profileRequirement)
 
   return (
     <Flex flexDirection="column">
@@ -42,13 +46,14 @@ const CardActions: React.FC<CardActionsProps> = ({ pool, stakedBalance, stakingT
                 {`${earningToken.symbol} `}
               </InlineText>
               <InlineText color="textSubtle" textTransform="uppercase" bold fontSize="12px">
-                {t(`earned`)}
+                {t('Earned')}
               </InlineText>
             </Box>
             <HarvestActions
               earnings={earnings}
               earningToken={earningToken}
               sousId={sousId}
+              earningTokenPrice={earningTokenPrice}
               isBnbPool={isBnbPool}
               isLoading={isLoading}
             />
@@ -56,20 +61,21 @@ const CardActions: React.FC<CardActionsProps> = ({ pool, stakedBalance, stakingT
         )}
         <Box display="inline">
           <InlineText color={isStaked ? 'secondary' : 'textSubtle'} textTransform="uppercase" bold fontSize="12px">
-            {isStaked ? stakingToken.symbol : t(`stake`)}{' '}
+            {isStaked ? stakingToken.symbol : t('Stake')}{' '}
           </InlineText>
           <InlineText color={isStaked ? 'textSubtle' : 'secondary'} textTransform="uppercase" bold fontSize="12px">
-            {isStaked ? t(`staked`) : `${stakingToken.symbol}`}
+            {isStaked ? t('Staked') : `${stakingToken.symbol}`}
           </InlineText>
         </Box>
-        {needsApproval ? (
+        {notMeetRequired || notMeetThreshold ? (
+          <ProfileRequirementWarning profileRequirement={profileRequirement} />
+        ) : needsApproval ? (
           <ApprovalAction pool={pool} isLoading={isLoading} />
         ) : (
           <StakeActions
             isLoading={isLoading}
             pool={pool}
             stakingTokenBalance={stakingTokenBalance}
-            stakingTokenPrice={stakingTokenPrice}
             stakedBalance={stakedBalance}
             isBnbPool={isBnbPool}
             isStaked={isStaked}

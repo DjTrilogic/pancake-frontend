@@ -1,51 +1,18 @@
-import React, { useState } from 'react'
 import { Button, AutoRenewIcon, Skeleton } from '@pancakeswap/uikit'
-import { useWeb3React } from '@web3-react/core'
-import { ethers } from 'ethers'
 import { useTranslation } from 'contexts/Localization'
-import { useCake, useCakeVaultContract } from 'hooks/useContract'
-import useToast from 'hooks/useToast'
-import { Pool } from 'state/types'
+import { VaultKey } from 'state/types'
+import { useVaultApprove } from '../../../hooks/useApprove'
 
 interface ApprovalActionProps {
-  pool: Pool
   setLastUpdated: () => void
   isLoading?: boolean
+  vaultKey: VaultKey
 }
 
-const ApprovalAction: React.FC<ApprovalActionProps> = ({ pool, isLoading = false, setLastUpdated }) => {
-  const { account } = useWeb3React()
-  const { stakingToken } = pool
-  const cakeVaultContract = useCakeVaultContract()
-  const cakeContract = useCake()
+const VaultApprovalAction: React.FC<ApprovalActionProps> = ({ vaultKey, isLoading = false, setLastUpdated }) => {
   const { t } = useTranslation()
-  const [requestedApproval, setRequestedApproval] = useState(false)
-  const { toastSuccess, toastError } = useToast()
 
-  const handleApprove = () => {
-    cakeContract.methods
-      .approve(cakeVaultContract.options.address, ethers.constants.MaxUint256)
-      .send({ from: account })
-      .on('sending', () => {
-        setRequestedApproval(true)
-      })
-      .on('receipt', () => {
-        toastSuccess(
-          `${t('Contract Enabled')}`,
-          `${t(`You can now stake in the %symbol% vault!`, { symbol: stakingToken.symbol })}`,
-        )
-        setLastUpdated()
-        setRequestedApproval(false)
-      })
-      .on('error', (error) => {
-        console.error(error)
-        toastError(
-          `${t('Error')}`,
-          `${t(`Please try again. Confirm the transaction and make sure you are paying enough gas!`)}`,
-        )
-        setRequestedApproval(false)
-      })
-  }
+  const { handleApprove, pendingTx } = useVaultApprove(vaultKey, setLastUpdated)
 
   return (
     <>
@@ -53,9 +20,9 @@ const ApprovalAction: React.FC<ApprovalActionProps> = ({ pool, isLoading = false
         <Skeleton width="100%" height="52px" />
       ) : (
         <Button
-          isLoading={requestedApproval}
-          endIcon={requestedApproval ? <AutoRenewIcon spin color="currentColor" /> : null}
-          disabled={requestedApproval}
+          isLoading={pendingTx}
+          endIcon={pendingTx ? <AutoRenewIcon spin color="currentColor" /> : null}
+          disabled={pendingTx}
           onClick={handleApprove}
           width="100%"
         >
@@ -66,4 +33,4 @@ const ApprovalAction: React.FC<ApprovalActionProps> = ({ pool, isLoading = false
   )
 }
 
-export default ApprovalAction
+export default VaultApprovalAction

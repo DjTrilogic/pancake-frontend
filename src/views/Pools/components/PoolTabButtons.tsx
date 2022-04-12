@@ -1,67 +1,96 @@
-import React from 'react'
+import { NextLinkFromReactRouter } from 'components/NextLink'
+import ToggleView from 'components/ToggleView/ToggleView'
+import { ViewMode } from 'state/user/actions'
+import { useRouter } from 'next/router'
 import styled from 'styled-components'
-import { useRouteMatch, Link } from 'react-router-dom'
-import {
-  ButtonMenu,
-  ButtonMenuItem,
-  Button,
-  HelpIcon,
-  Toggle,
-  Text,
-  Flex,
-  NotificationDot,
-  Link as UiKitLink,
-} from '@pancakeswap/uikit'
+import { ButtonMenu, ButtonMenuItem, Toggle, Text, NotificationDot } from '@pancakeswap/uikit'
 import { useTranslation } from 'contexts/Localization'
 
-const ButtonText = styled(Text)`
-  display: none;
-  ${({ theme }) => theme.mediaQueries.lg} {
-    display: block;
+const ToggleWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  margin-left: 10px;
+
+  ${Text} {
+    margin-left: 8px;
   }
 `
 
-const StyledLink = styled(UiKitLink)`
+const ViewControls = styled.div`
+  flex-wrap: wrap;
+  justify-content: space-between;
+  display: flex;
+  align-items: center;
   width: 100%;
 
-  &:hover {
-    text-decoration: none;
+  > div {
+    padding: 8px 0px;
+  }
+
+  ${({ theme }) => theme.mediaQueries.sm} {
+    justify-content: flex-start;
+    width: auto;
+
+    > div {
+      padding: 0;
+    }
   }
 `
 
-const PoolTabButtons = ({ stakedOnly, setStakedOnly, hasStakeInFinishedPools }) => {
-  const { url, isExact } = useRouteMatch()
+const Wrapper = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  a {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  ${({ theme }) => theme.mediaQueries.sm} {
+    margin-left: 16px;
+  }
+`
+
+const PoolTabButtons = ({ stakedOnly, setStakedOnly, hasStakeInFinishedPools, viewMode, setViewMode }) => {
+  const router = useRouter()
+
   const { t } = useTranslation()
 
-  return (
-    <Flex alignItems="center" justifyContent="center" mb="32px">
-      <Flex alignItems="center" flexDirection={['column', null, 'row', null]}>
-        <ButtonMenu activeIndex={isExact ? 0 : 1} scale="sm" variant="subtle">
-          <ButtonMenuItem as={Link} to={`${url}`}>
-            {t('Live')}
+  const isExact = router.asPath === '/pools'
+
+  const viewModeToggle = (
+    <ToggleView idPrefix="clickPool" viewMode={viewMode} onToggle={(mode: ViewMode) => setViewMode(mode)} />
+  )
+
+  const liveOrFinishedSwitch = (
+    <Wrapper>
+      <ButtonMenu activeIndex={isExact ? 0 : 1} scale="sm" variant="subtle">
+        <ButtonMenuItem as={NextLinkFromReactRouter} to="/pools" replace>
+          {t('Live')}
+        </ButtonMenuItem>
+        <NotificationDot show={hasStakeInFinishedPools}>
+          <ButtonMenuItem id="finished-pools-button" as={NextLinkFromReactRouter} to="/pools/history" replace>
+            {t('Finished')}
           </ButtonMenuItem>
-          <NotificationDot show={hasStakeInFinishedPools}>
-            <ButtonMenuItem as={Link} to={`${url}/history`}>
-              {t('Finished')}
-            </ButtonMenuItem>
-          </NotificationDot>
-        </ButtonMenu>
-        <Flex mt={['4px', null, 0, null]} ml={[0, null, '24px', null]} justifyContent="center" alignItems="center">
-          <Toggle scale="sm" checked={stakedOnly} onChange={() => setStakedOnly((prev) => !prev)} />
-          <Text ml="8px">{t('Staked only')}</Text>
-        </Flex>
-      </Flex>
-      <Flex ml="24px" alignItems="center" justifyContent="flex-end">
-        <StyledLink external href="https://docs.pancakeswap.finance/syrup-pools/syrup-pool">
-          <Button px={['14px', null, null, null, '20px']} variant="subtle">
-            <ButtonText color="backgroundAlt" bold fontSize="16px">
-              {t('Help')}
-            </ButtonText>
-            <HelpIcon color="backgroundAlt" ml={[null, null, null, 0, '6px']} />
-          </Button>
-        </StyledLink>
-      </Flex>
-    </Flex>
+        </NotificationDot>
+      </ButtonMenu>
+    </Wrapper>
+  )
+
+  const stakedOnlySwitch = (
+    <ToggleWrapper>
+      <Toggle checked={stakedOnly} onChange={() => setStakedOnly(!stakedOnly)} scale="sm" />
+      <Text> {t('Staked only')}</Text>
+    </ToggleWrapper>
+  )
+
+  return (
+    <ViewControls>
+      {viewModeToggle}
+      {stakedOnlySwitch}
+      {liveOrFinishedSwitch}
+    </ViewControls>
   )
 }
 

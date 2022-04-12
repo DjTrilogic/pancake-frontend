@@ -1,33 +1,44 @@
-import React from 'react'
 import { Text, Flex, useTooltip, TooltipText } from '@pancakeswap/uikit'
 import { useTranslation } from 'contexts/Localization'
-import { VaultFees } from 'hooks/cakeVault/useGetVaultFees'
+import { VaultKey } from 'state/types'
+import { useVaultPoolByKey } from 'state/pools/hooks'
+import { secondsToDay } from 'utils/timeHelper'
+import { getHasWithdrawFee } from '../../hooks/useWithdrawalFeeTimer'
 import UnstakingFeeCountdownRow from './UnstakingFeeCountdownRow'
 
 interface FeeSummaryProps {
   stakingTokenSymbol: string
-  lastDepositedTime: string
-  vaultFees: VaultFees
   stakeAmount: string
+  vaultKey: VaultKey
 }
 
-const FeeSummary: React.FC<FeeSummaryProps> = ({ stakingTokenSymbol, lastDepositedTime, vaultFees, stakeAmount }) => {
+const FeeSummary: React.FC<FeeSummaryProps> = ({ stakingTokenSymbol, stakeAmount, vaultKey }) => {
   const { t } = useTranslation()
-  const feeAsDecimal = parseInt(vaultFees.withdrawalFee) / 100
+  const {
+    fees: { withdrawalFee, withdrawalFeePeriod },
+    userData: { lastDepositedTime },
+  } = useVaultPoolByKey(vaultKey)
+  const feeAsDecimal = withdrawalFee / 100
   const feeInCake = (parseFloat(stakeAmount) * (feeAsDecimal / 100)).toFixed(4)
+  const withdrawalDayPeriod = withdrawalFeePeriod ? secondsToDay(withdrawalFeePeriod) : '-'
   const { targetRef, tooltip, tooltipVisible } = useTooltip(
     <>
       <Text bold mb="4px">
-        {t(`Unstaking fee: %fee%%`, { fee: feeAsDecimal })}
+        {t('Unstaking fee: %fee%%', { fee: feeAsDecimal })}
       </Text>
       <Text>
         {t(
-          'Only applies within 3 days of staking. Unstaking after 3 days will not include a fee. Timer resets every time you stake new CAKE in the pool.',
+          'Only applies within %num% days of staking. Unstaking after %num% days will not include a fee. Timer resets every time you stake new CAKE in the pool.',
+          {
+            num: withdrawalDayPeriod,
+          },
         )}
       </Text>
     </>,
     { placement: 'top-start' },
   )
+
+  const hasFeeToPay = lastDepositedTime && getHasWithdrawFee(parseInt(lastDepositedTime, 10), withdrawalFeePeriod)
 
   return (
     <>
@@ -37,14 +48,10 @@ const FeeSummary: React.FC<FeeSummaryProps> = ({ stakingTokenSymbol, lastDeposit
           {t('Unstaking Fee')}
         </TooltipText>
         <Text fontSize="14px">
-          {stakeAmount ? feeInCake : '-'} {stakingTokenSymbol}
+          {stakeAmount && hasFeeToPay ? feeInCake : '-'} {stakingTokenSymbol}
         </Text>
       </Flex>
-      <UnstakingFeeCountdownRow
-        withdrawalFee={vaultFees.withdrawalFee}
-        withdrawalFeePeriod={vaultFees.withdrawalFeePeriod}
-        lastDepositedTime={lastDepositedTime}
-      />
+      <UnstakingFeeCountdownRow vaultKey={vaultKey} />
     </>
   )
 }

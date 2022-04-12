@@ -1,4 +1,3 @@
-import React from 'react'
 import { Button, Text } from '@pancakeswap/uikit'
 import { useTranslation } from 'contexts/Localization'
 import { useAppDispatch } from 'state'
@@ -15,7 +14,7 @@ const ErrorNotification = () => {
   return (
     <Notification title={t('Error')}>
       <Text as="p" mb="24px">
-        {t("This page can't be displayed right now due to an error. Please check back soon.")}
+        {t('This page can’t be displayed right now due to an error. Please check back soon.')}
       </Text>
       <Button variant="primary" width="100%" onClick={handleOpenHistory}>
         {t('Show History')}

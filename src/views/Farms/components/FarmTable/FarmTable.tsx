@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+import { useRef } from 'react'
 import styled from 'styled-components'
 import { useTable, Button, ChevronUpIcon, ColumnType } from '@pancakeswap/uikit'
 import { useTranslation } from 'contexts/Localization'
@@ -22,6 +22,7 @@ const Container = styled.div`
 
 const TableWrapper = styled.div`
   overflow: visible;
+  scroll-margin-top: 64px;
 
   &::-webkit-scrollbar {
     display: none;
@@ -71,7 +72,7 @@ const FarmTable: React.FC<ITableProps> = (props) => {
   }
 
   return (
-    <Container>
+    <Container id="farms-table">
       <TableContainer>
         <TableWrapper ref={tableWrapperEl}>
           <StyledTable>

@@ -1,10 +1,12 @@
-import React, { useState } from 'react'
-import { useWeb3React } from '@web3-react/core'
+import { useState } from 'react'
 import styled from 'styled-components'
 import { Button, Heading, Text, Flex, Checkbox, AutoRenewIcon } from '@pancakeswap/uikit'
-import { useTradingCompetitionContract } from 'hooks/useContract'
+import { useTradingCompetitionContractMobox } from 'hooks/useContract'
 import { useTranslation } from 'contexts/Localization'
+import { useCallWithGasPrice } from 'hooks/useCallWithGasPrice'
 import useToast from 'hooks/useToast'
+import useCatchTxError from 'hooks/useCatchTxError'
+import { ToastDescriptionWithTx } from 'components/Toast'
 import { CompetitionProps } from '../../types'
 
 const StyledCheckbox = styled(Checkbox)`
@@ -17,33 +19,29 @@ const StyledLabel = styled.label`
 
 const RegisterWithProfile: React.FC<CompetitionProps> = ({ profile, onDismiss, onRegisterSuccess }) => {
   const [isAcknowledged, setIsAcknowledged] = useState(false)
-  const [isConfirming, setIsConfirming] = useState(false)
-  const tradingCompetitionContract = useTradingCompetitionContract()
-  const { account } = useWeb3React()
-  const { toastSuccess, toastError } = useToast()
+  const tradingCompetitionContract = useTradingCompetitionContractMobox()
+  const { toastSuccess } = useToast()
+  const { fetchWithCatchTxError, loading: isConfirming } = useCatchTxError()
   const { t } = useTranslation()
+  const { callWithGasPrice } = useCallWithGasPrice()
 
-  const handleConfirmClick = () => {
-    tradingCompetitionContract.methods
-      .register()
-      .send({ from: account })
-      .on('sending', () => {
-        setIsConfirming(true)
-      })
-      .on('receipt', async () => {
-        toastSuccess('You have registered for the competition!')
-        onDismiss()
-        onRegisterSuccess()
-      })
-      .on('error', (error) => {
-        toastError('Error', error?.message)
-        setIsConfirming(false)
-      })
+  const handleConfirmClick = async () => {
+    const receipt = await fetchWithCatchTxError(() => {
+      return callWithGasPrice(tradingCompetitionContract, 'register')
+    })
+    if (receipt?.status) {
+      toastSuccess(
+        t('You have registered for the competition!'),
+        <ToastDescriptionWithTx txHash={receipt.transactionHash} />,
+      )
+      onDismiss()
+      onRegisterSuccess()
+    }
   }
 
   return (
     <>
-      <Heading size="md" mb="24px">{`@${profile.username}`}</Heading>
+      <Heading scale="md" mb="24px">{`@${profile.username}`}</Heading>
       <Flex flexDirection="column">
         <Text bold>
           {t('Registering for the competition will make your wallet address publicly visible on the leaderboard.')}

@@ -1,10 +1,11 @@
-import React from 'react'
 import styled, { keyframes, css } from 'styled-components'
 import { useTranslation } from 'contexts/Localization'
 import { LinkExternal, Text } from '@pancakeswap/uikit'
-import { FarmWithStakedValue } from 'views/Farms/components/FarmCard/FarmCard'
 import getLiquidityUrlPathParts from 'utils/getLiquidityUrlPathParts'
-import { CommunityTag, CoreTag, DualTag } from 'components/Tags'
+import { getAddress } from 'utils/addressHelpers'
+import { getBscScanLink } from 'utils'
+import { FarmAuctionTag, CoreTag, DualTag } from 'components/Tags'
+import { FarmWithStakedValue } from '../../types'
 
 import HarvestAction from './HarvestAction'
 import StakedAction from './StakedAction'
@@ -146,24 +147,24 @@ const ActionPanel: React.FunctionComponent<ActionPanelProps> = ({
     quoteTokenAddress: quoteToken.address,
     tokenAddress: token.address,
   })
-  const lpAddress = farm.lpAddresses[process.env.REACT_APP_CHAIN_ID]
-  const bsc = `https://bscscan.com/address/${lpAddress}`
-  const info = `https://pancakeswap.info/pair/${lpAddress}`
+  const lpAddress = getAddress(farm.lpAddresses)
+  const bsc = getBscScanLink(lpAddress, 'address')
+  const info = `/info/pool/${lpAddress}`
 
   return (
     <Container expanded={expanded}>
       <InfoContainer>
         {isActive && (
           <StakeContainer>
-            <StyledLinkExternal href={`https://exchange.pancakeswap.finance/#/add/${liquidityUrlPathParts}`}>
-              {t(`Get ${lpLabel}`, { name: lpLabel })}
+            <StyledLinkExternal href={`/add/${liquidityUrlPathParts}`}>
+              {t('Get %symbol%', { symbol: lpLabel })}
             </StyledLinkExternal>
           </StakeContainer>
         )}
         <StyledLinkExternal href={bsc}>{t('View Contract')}</StyledLinkExternal>
         <StyledLinkExternal href={info}>{t('See Pair Info')}</StyledLinkExternal>
         <TagsContainer>
-          {farm.isCommunity ? <CommunityTag /> : <CoreTag />}
+          {farm.isCommunity ? <FarmAuctionTag /> : <CoreTag />}
           {dual ? <DualTag /> : null}
         </TagsContainer>
       </InfoContainer>
@@ -183,7 +184,7 @@ const ActionPanel: React.FunctionComponent<ActionPanelProps> = ({
       </ValueContainer>
       <ActionContainer>
         <HarvestAction {...farm} userDataReady={userDataReady} />
-        <StakedAction {...farm} userDataReady={userDataReady} />
+        <StakedAction {...farm} userDataReady={userDataReady} lpLabel={lpLabel} displayApr={apr.value} />
       </ActionContainer>
     </Container>
   )

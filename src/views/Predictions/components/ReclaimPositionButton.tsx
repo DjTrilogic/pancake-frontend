@@ -1,9 +1,11 @@
-import React, { ReactNode, useState } from 'react'
+import { ReactNode } from 'react'
 import { AutoRenewIcon, Button, ButtonProps } from '@pancakeswap/uikit'
-import { useWeb3React } from '@web3-react/core'
 import { useTranslation } from 'contexts/Localization'
 import { usePredictionsContract } from 'hooks/useContract'
 import useToast from 'hooks/useToast'
+import { useCallWithGasPrice } from 'hooks/useCallWithGasPrice'
+import useCatchTxError from 'hooks/useCatchTxError'
+import { ToastDescriptionWithTx } from 'components/Toast'
 
 interface ReclaimPositionButtonProps extends ButtonProps {
   epoch: number
@@ -12,31 +14,22 @@ interface ReclaimPositionButtonProps extends ButtonProps {
 }
 
 const ReclaimPositionButton: React.FC<ReclaimPositionButtonProps> = ({ epoch, onSuccess, children, ...props }) => {
-  const [isPendingTx, setIsPendingTx] = useState(false)
   const { t } = useTranslation()
-  const { account } = useWeb3React()
   const predictionsContract = usePredictionsContract()
-  const { toastSuccess, toastError } = useToast()
+  const { callWithGasPrice } = useCallWithGasPrice()
+  const { toastSuccess } = useToast()
+  const { fetchWithCatchTxError, loading: isPendingTx } = useCatchTxError()
 
-  const handleReclaim = () => {
-    predictionsContract.methods
-      .claim(epoch)
-      .send({ from: account })
-      .once('sending', () => {
-        setIsPendingTx(true)
-      })
-      .once('receipt', async () => {
-        if (onSuccess) {
-          await onSuccess()
-        }
-        setIsPendingTx(false)
-        toastSuccess(t('Position reclaimed!'))
-      })
-      .once('error', (error) => {
-        setIsPendingTx(false)
-        toastError('Error', error?.message)
-        console.error(error)
-      })
+  const handleReclaim = async () => {
+    const receipt = await fetchWithCatchTxError(() => {
+      return callWithGasPrice(predictionsContract, 'claim', [[epoch]])
+    })
+    if (receipt?.status) {
+      if (onSuccess) {
+        await onSuccess()
+      }
+      toastSuccess(t('Position reclaimed!'), <ToastDescriptionWithTx txHash={receipt.transactionHash} />)
+    }
   }
 
   return (

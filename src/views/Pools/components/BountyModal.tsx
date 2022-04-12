@@ -1,22 +1,36 @@
-import React, { useState } from 'react'
+import { useMemo } from 'react'
 import BigNumber from 'bignumber.js'
 import { useWeb3React } from '@web3-react/core'
 import styled from 'styled-components'
-import { Modal, Text, Flex, Button, HelpIcon, AutoRenewIcon, useTooltip } from '@pancakeswap/uikit'
-import { getFullDisplayBalance } from 'utils/formatBalance'
+import {
+  Modal,
+  Text,
+  Flex,
+  Button,
+  HelpIcon,
+  AutoRenewIcon,
+  useTooltip,
+  Message,
+  MessageText,
+} from '@pancakeswap/uikit'
+import { getBalanceNumber } from 'utils/formatBalance'
 import { useCakeVaultContract } from 'hooks/useContract'
 import useTheme from 'hooks/useTheme'
 import useToast from 'hooks/useToast'
+import useCatchTxError from 'hooks/useCatchTxError'
 import { useTranslation } from 'contexts/Localization'
-import UnlockButton from 'components/UnlockButton'
+import ConnectWalletButton from 'components/ConnectWalletButton'
+import { ToastDescriptionWithTx } from 'components/Toast'
+import Balance from 'components/Balance'
+import { useCallWithGasPrice } from 'hooks/useCallWithGasPrice'
 
 interface BountyModalProps {
-  cakeBountyToDisplay: string
-  dollarBountyToDisplay: string
-  totalPendingCakeHarvest: BigNumber
-  callFee: number
   onDismiss?: () => void
   TooltipComponent: React.ElementType
+  estimatedCakeBountyReward: BigNumber
+  totalPendingCakeHarvest: BigNumber
+  callFee: number
+  cakePriceBusd: BigNumber
 }
 
 const Divider = styled.div`
@@ -27,57 +41,70 @@ const Divider = styled.div`
 `
 
 const BountyModal: React.FC<BountyModalProps> = ({
-  cakeBountyToDisplay,
-  dollarBountyToDisplay,
+  onDismiss,
+  estimatedCakeBountyReward,
   totalPendingCakeHarvest,
   callFee,
-  onDismiss,
+  cakePriceBusd,
   TooltipComponent,
 }) => {
   const { t } = useTranslation()
   const { account } = useWeb3React()
   const { theme } = useTheme()
-  const { toastError, toastSuccess } = useToast()
+  const { toastSuccess } = useToast()
+  const { fetchWithCatchTxError, loading: pendingTx } = useCatchTxError()
   const cakeVaultContract = useCakeVaultContract()
-  const [pendingTx, setPendingTx] = useState(false)
+  const { callWithGasPrice } = useCallWithGasPrice()
   const callFeeAsDecimal = callFee / 100
-  const totalYieldToDisplay = getFullDisplayBalance(totalPendingCakeHarvest, 18, 3)
-  const { targetRef, tooltip, tooltipVisible } = useTooltip(<TooltipComponent />, {
+  const totalYieldToDisplay = getBalanceNumber(totalPendingCakeHarvest, 18)
+
+  const estimatedDollarBountyReward = useMemo(() => {
+    return new BigNumber(estimatedCakeBountyReward).multipliedBy(cakePriceBusd)
+  }, [cakePriceBusd, estimatedCakeBountyReward])
+
+  const hasFetchedDollarBounty = estimatedDollarBountyReward.gte(0)
+  const hasFetchedCakeBounty = estimatedCakeBountyReward ? estimatedCakeBountyReward.gte(0) : false
+  const dollarBountyToDisplay = hasFetchedDollarBounty ? getBalanceNumber(estimatedDollarBountyReward, 18) : 0
+  const cakeBountyToDisplay = hasFetchedCakeBounty ? getBalanceNumber(estimatedCakeBountyReward, 18) : 0
+
+  const { targetRef, tooltip, tooltipVisible } = useTooltip(<TooltipComponent fee={callFee} />, {
     placement: 'bottom',
     tooltipPadding: { right: 15 },
   })
 
   const handleConfirmClick = async () => {
-    cakeVaultContract.methods
-      .harvest()
-      .send({ from: account })
-      .on('sending', () => {
-        setPendingTx(true)
-      })
-      .on('receipt', () => {
-        toastSuccess(t('Bounty collected!'), t('CAKE bounty has been sent to your wallet.'))
-        setPendingTx(false)
-        onDismiss()
-      })
-      .on('error', (error) => {
-        console.error(error)
-        toastError(
-          t('Could not be collected'),
-          t(`There may be an issue with your transaction, or another user claimed the bounty first.`),
-        )
-        setPendingTx(false)
-      })
+    const receipt = await fetchWithCatchTxError(() => {
+      return callWithGasPrice(cakeVaultContract, 'harvest', undefined, { gasLimit: 300000 })
+    })
+    if (receipt?.status) {
+      toastSuccess(
+        t('Bounty collected!'),
+        <ToastDescriptionWithTx txHash={receipt.transactionHash}>
+          {t('CAKE bounty has been sent to your wallet.')}
+        </ToastDescriptionWithTx>,
+      )
+    }
   }
 
   return (
     <Modal title={t('Claim Bounty')} onDismiss={onDismiss} headerBackground={theme.colors.gradients.cardHeader}>
       {tooltipVisible && tooltip}
+      <Message variant="warning" mb="16px">
+        <MessageText>{t('Remember that you will pay the gas fee.')}</MessageText>
+      </Message>
       <Flex alignItems="flex-start" justifyContent="space-between">
-        <Text>{t("You'll claim")}</Text>
+        <Text>{t('You’ll claim')}</Text>
         <Flex flexDirection="column">
-          <Text bold>{cakeBountyToDisplay} CAKE</Text>
+          <Balance bold value={cakeBountyToDisplay} decimals={7} unit=" CAKE" />
           <Text fontSize="12px" color="textSubtle">
-            ~ {dollarBountyToDisplay} USD
+            <Balance
+              fontSize="12px"
+              color="textSubtle"
+              value={dollarBountyToDisplay}
+              decimals={2}
+              unit=" USD"
+              prefix="~"
+            />
           </Text>
         </Flex>
       </Flex>
@@ -86,9 +113,7 @@ const BountyModal: React.FC<BountyModalProps> = ({
         <Text fontSize="14px" color="textSubtle">
           {t('Pool total pending yield')}
         </Text>
-        <Text fontSize="14px" color="textSubtle">
-          {totalYieldToDisplay} CAKE
-        </Text>
+        <Balance color="textSubtle" value={totalYieldToDisplay} unit=" CAKE" />
       </Flex>
       <Flex alignItems="center" justifyContent="space-between" mb="24px">
         <Text fontSize="14px" color="textSubtle">
@@ -101,18 +126,20 @@ const BountyModal: React.FC<BountyModalProps> = ({
       {account ? (
         <Button
           isLoading={pendingTx}
+          disabled={!dollarBountyToDisplay || !cakeBountyToDisplay || !callFee}
           endIcon={pendingTx ? <AutoRenewIcon spin color="currentColor" /> : null}
           onClick={handleConfirmClick}
           mb="28px"
+          id="autoCakeConfirmBounty"
         >
-          {t('Confirm')}
+          {pendingTx ? t('Confirming') : t('Confirm')}
         </Button>
       ) : (
-        <UnlockButton mb="28px" />
+        <ConnectWalletButton mb="28px" />
       )}
       <Flex justifyContent="center" alignItems="center">
         <Text fontSize="16px" bold color="textSubtle" mr="4px">
-          {t("What's this?")}
+          {t('What’s this?')}
         </Text>
         <span ref={targetRef}>
           <HelpIcon color="textSubtle" />

@@ -1,24 +1,21 @@
-import React from 'react'
 import { useWeb3React } from '@web3-react/core'
-import { Box, Flex, Heading, Text, PrizeIcon, BlockIcon } from '@pancakeswap/uikit'
+import { Box, Flex, Heading, Text, PrizeIcon, BlockIcon, LinkExternal, useTooltip, InfoIcon } from '@pancakeswap/uikit'
+import styled from 'styled-components'
 import { useAppDispatch } from 'state'
 import { useTranslation } from 'contexts/Localization'
-import { usePriceBnbBusd } from 'state/hooks'
-import styled from 'styled-components'
+import { REWARD_RATE } from 'state/predictions/config'
 import { Bet, BetPosition } from 'state/types'
-import { fetchBet } from 'state/predictions'
+import { fetchLedgerData, markAsCollected } from 'state/predictions'
+import { Result } from 'state/predictions/helpers'
+import { useGetIsClaimable } from 'state/predictions/hooks'
+import { useBNBBusdPrice } from 'hooks/useBUSDPrice'
+import { getBscScanLink } from 'utils'
+import { multiplyPriceByAmount } from 'utils/prices'
 import useIsRefundable from '../../hooks/useIsRefundable'
-import { formatBnb, getPayout } from '../../helpers'
+import { formatBnb, getNetPayout } from './helpers'
 import CollectWinningsButton from '../CollectWinningsButton'
 import PositionTag from '../PositionTag'
 import ReclaimPositionButton from '../ReclaimPositionButton'
-
-export enum Result {
-  WIN = 'win',
-  LOSE = 'lose',
-  CANCELED = 'canceled',
-  LIVE = 'live',
-}
 
 interface BetResultProps {
   bet: Bet
@@ -32,15 +29,28 @@ const StyledBetResult = styled(Box)`
   padding: 16px;
 `
 
+const Divider = styled.hr`
+  border: 1px solid ${({ theme }) => theme.colors.cardBorder};
+`
+
 const BetResult: React.FC<BetResultProps> = ({ bet, result }) => {
   const { t } = useTranslation()
   const dispatch = useAppDispatch()
   const { account } = useWeb3React()
   const { isRefundable } = useIsRefundable(bet.round.epoch)
-  const bnbBusdPrice = usePriceBnbBusd()
+  const canClaim = useGetIsClaimable(bet.round.epoch)
+  const bnbBusdPrice = useBNBBusdPrice()
+  const { targetRef, tooltip, tooltipVisible } = useTooltip(
+    <Text as="p">{t('Includes your original position and your winnings, minus the %fee% fee.', { fee: '3%' })}</Text>,
+    { placement: 'auto' },
+  )
+
+  const isWinner = result === Result.WIN
 
   // Winners get the payout, otherwise the claim what they put it if it was canceled
-  const payout = result === Result.WIN ? getPayout(bet) : bet.amount
+  const payout = isWinner ? getNetPayout(bet, REWARD_RATE) : bet.amount
+  const totalPayout = multiplyPriceByAmount(bnbBusdPrice, payout)
+  const returned = payout + bet.amount
 
   const getHeaderColor = () => {
     switch (result) {
@@ -49,6 +59,8 @@ const BetResult: React.FC<BetResultProps> = ({ bet, result }) => {
       case Result.LOSE:
         return 'textSubtle'
       case Result.CANCELED:
+        return 'textDisabled'
+      case Result.HOUSE:
         return 'textDisabled'
       default:
         return 'text'
@@ -62,7 +74,9 @@ const BetResult: React.FC<BetResultProps> = ({ bet, result }) => {
       case Result.LOSE:
         return t('Lose')
       case Result.CANCELED:
-        return t('Canceled')
+        return t('Cancelled')
+      case Result.HOUSE:
+        return t('To Burn')
       default:
         return ''
     }
@@ -87,13 +101,16 @@ const BetResult: React.FC<BetResultProps> = ({ bet, result }) => {
       case Result.LOSE:
         return 'failure'
       case Result.CANCELED:
+      case Result.HOUSE:
       default:
         return 'text'
     }
   }
 
   const handleSuccess = async () => {
-    await dispatch(fetchBet({ account, id: bet.id }))
+    // We have to mark the bet as claimed immediately because it does not update fast enough
+    dispatch(markAsCollected({ [bet.round.epoch]: true }))
+    dispatch(fetchLedgerData({ account, epochs: [bet.round.epoch] }))
   }
 
   return (
@@ -108,23 +125,23 @@ const BetResult: React.FC<BetResultProps> = ({ bet, result }) => {
         </Flex>
       </Flex>
       <StyledBetResult>
-        {result === Result.WIN && !bet.claimed && (
-          <CollectWinningsButton
-            payout={payout}
-            epoch={bet.round.epoch}
-            hasClaimed={bet.claimed}
-            width="100%"
-            mb="16px"
-            onSuccess={handleSuccess}
-          >
-            {t('Collect Winnings')}
+        {result === Result.WIN && !canClaim && (
+          <CollectWinningsButton hasClaimed={!canClaim} width="100%" mb="16px" onSuccess={handleSuccess}>
+            {bet.claimed ? t('Already Collected') : t('Collect Winnings')}
           </CollectWinningsButton>
+        )}
+        {bet.claimed && bet.claimedHash && (
+          <Flex justifyContent="center">
+            <LinkExternal href={getBscScanLink(bet.claimedHash, 'transaction')} mb="16px">
+              {t('View on BscScan')}
+            </LinkExternal>
+          </Flex>
         )}
         {result === Result.CANCELED && isRefundable && (
           <ReclaimPositionButton epoch={bet.round.epoch} width="100%" mb="16px" />
         )}
         <Flex alignItems="center" justifyContent="space-between" mb="16px">
-          <Text>{t('Your direction')}</Text>
+          <Text>{t('Your direction')}:</Text>
           <PositionTag betPosition={bet.position}>
             {bet.position === BetPosition.BULL ? t('Up') : t('Down')}
           </PositionTag>
@@ -134,14 +151,31 @@ const BetResult: React.FC<BetResultProps> = ({ bet, result }) => {
           <Text>{`${formatBnb(bet.amount)} BNB`}</Text>
         </Flex>
         <Flex alignItems="start" justifyContent="space-between">
-          <Text bold>{t('Your Result')}</Text>
+          <Text bold>{isWinner ? t('Your winnings') : t('Your Result')}:</Text>
           <Box style={{ textAlign: 'right' }}>
-            <Text bold color={getResultColor()}>{`${result === Result.LOSE ? '-' : '+'}${formatBnb(payout)} BNB`}</Text>
+            <Text bold color={getResultColor()}>{`${isWinner ? '+' : '-'}${formatBnb(payout)} BNB`}</Text>
             <Text fontSize="12px" color="textSubtle">
-              {`~$${formatBnb(bnbBusdPrice.times(payout).toNumber())}`}
+              {`~$${totalPayout.toFixed(2)}`}
             </Text>
           </Box>
         </Flex>
+        {isWinner && (
+          <>
+            <Divider />
+            <Flex alignItems="start" justifyContent="space-between">
+              <Text fontSize="14px" color="textSubtle">
+                {t('Amount to collect')}:
+              </Text>
+              <Flex justifyContent="end">
+                <Text fontSize="14px" color="textSubtle">{`${formatBnb(returned)} BNB`}</Text>
+                <span ref={targetRef}>
+                  <InfoIcon color="textSubtle" ml="4px" />
+                </span>
+              </Flex>
+              {tooltipVisible && tooltip}
+            </Flex>
+          </>
+        )}
       </StyledBetResult>
     </>
   )

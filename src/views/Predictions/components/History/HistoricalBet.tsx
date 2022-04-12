@@ -1,17 +1,29 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
+import {
+  Box,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  Flex,
+  IconButton,
+  InfoIcon,
+  PlayCircleOutlineIcon,
+  Text,
+  useTooltip,
+  WaitIcon,
+} from '@pancakeswap/uikit'
 import { useWeb3React } from '@web3-react/core'
-import { Box, ChevronDownIcon, ChevronUpIcon, Flex, IconButton, PlayCircleOutlineIcon, Text } from '@pancakeswap/uikit'
 import styled from 'styled-components'
 import { useAppDispatch } from 'state'
-import { markBetAsCollected } from 'state/predictions'
-import { Bet, BetPosition, PredictionStatus } from 'state/types'
-import { useGetCurrentEpoch, useGetPredictionsStatus } from 'state/hooks'
+import { Bet, PredictionStatus } from 'state/types'
+import { REWARD_RATE } from 'state/predictions/config'
+import { useGetCurrentEpoch, useGetIsClaimable, useGetPredictionsStatus } from 'state/predictions/hooks'
+import { fetchLedgerData, markAsCollected } from 'state/predictions'
+import { getRoundResult, Result } from 'state/predictions/helpers'
 import { useTranslation } from 'contexts/Localization'
-import { formatBnb, getPayout } from '../../helpers'
+import { formatBnb, getNetPayout } from './helpers'
 import CollectWinningsButton from '../CollectWinningsButton'
 import ReclaimPositionButton from '../ReclaimPositionButton'
 import BetDetails from './BetDetails'
-import { Result } from './BetResult'
 
 interface BetProps {
   bet: Bet
@@ -19,7 +31,7 @@ interface BetProps {
 
 const StyledBet = styled(Flex).attrs({ alignItems: 'center', p: '16px' })`
   background-color: ${({ theme }) => theme.card.background};
-  border-bottom: 2px solid ${({ theme }) => theme.colors.borderColor};
+  border-bottom: 2px solid ${({ theme }) => theme.colors.cardBorder};
   cursor: pointer;
 `
 
@@ -29,28 +41,29 @@ const YourResult = styled(Box)`
 
 const HistoricalBet: React.FC<BetProps> = ({ bet }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const { amount, claimed, position, round } = bet
-
+  const { amount, round } = bet
   const { t } = useTranslation()
-  const { account } = useWeb3React()
-  const dispatch = useAppDispatch()
+  const { targetRef, tooltip, tooltipVisible } = useTooltip(
+    <>
+      <Text bold mb="4px">
+        {t('Neither side wins this round')}
+      </Text>
+      <Text>
+        {t(
+          'The Locked Price & Closed Price are exactly the same (within 8 decimals), so neither side wins. All funds entered into UP and DOWN positions will go to the weekly CAKE burn.',
+        )}
+      </Text>
+    </>,
+    { placement: 'right' },
+  )
+
   const currentEpoch = useGetCurrentEpoch()
   const status = useGetPredictionsStatus()
-  const roundResultPosition = round.closePrice > round.lockPrice ? BetPosition.BULL : BetPosition.BEAR
+  const canClaim = useGetIsClaimable(bet.round.epoch)
+  const dispatch = useAppDispatch()
+  const { account } = useWeb3React()
 
   const toggleOpen = () => setIsOpen(!isOpen)
-
-  const getRoundResult = () => {
-    if (round.failed) {
-      return Result.CANCELED
-    }
-
-    if (round.epoch >= currentEpoch - 1) {
-      return Result.LIVE
-    }
-
-    return position === roundResultPosition ? Result.WIN : Result.LOSE
-  }
 
   const getRoundColor = (result) => {
     switch (result) {
@@ -59,6 +72,8 @@ const HistoricalBet: React.FC<BetProps> = ({ bet }) => {
       case Result.LOSE:
         return 'failure'
       case Result.CANCELED:
+        return 'textDisabled'
+      case Result.HOUSE:
         return 'textDisabled'
       default:
         return 'text'
@@ -77,24 +92,20 @@ const HistoricalBet: React.FC<BetProps> = ({ bet }) => {
     return ''
   }
 
-  const handleSuccess = async () => {
-    dispatch(markBetAsCollected({ account, betId: bet.id }))
-  }
-
-  const roundResult = getRoundResult()
+  const roundResult = getRoundResult(bet, currentEpoch)
   const resultTextColor = getRoundColor(roundResult)
   const resultTextPrefix = getRoundPrefix(roundResult)
   const isOpenRound = round.epoch === currentEpoch
   const isLiveRound = status === PredictionStatus.LIVE && round.epoch === currentEpoch - 1
 
   // Winners get the payout, otherwise the claim what they put it if it was canceled
-  const payout = roundResult === Result.WIN ? getPayout(bet) : amount
+  const payout = roundResult === Result.WIN ? getNetPayout(bet, REWARD_RATE) : amount
 
   const renderBetLabel = () => {
     if (isOpenRound) {
       return (
         <Flex alignItems="center">
-          <PlayCircleOutlineIcon color="primary" mr="6px" width="24px" />
+          <WaitIcon color="primary" mr="6px" width="24px" />
           <Text color="primary" bold>
             {t('Starting Soon')}
           </Text>
@@ -119,10 +130,28 @@ const HistoricalBet: React.FC<BetProps> = ({ bet }) => {
           {t('Your Result')}
         </Text>
         <Text bold color={resultTextColor} lineHeight={1}>
-          {roundResult === Result.CANCELED ? t('Canceled') : `${resultTextPrefix}${formatBnb(payout)}`}
+          {roundResult === Result.CANCELED ? (
+            t('Cancelled')
+          ) : roundResult === Result.HOUSE ? (
+            <>
+              {tooltipVisible && tooltip}
+              <Flex alignItems="center" ref={targetRef}>
+                {t('To Burn')}
+                <InfoIcon width="16px" ml="4px" color="secondary" />
+              </Flex>
+            </>
+          ) : (
+            `${resultTextPrefix}${formatBnb(payout)}`
+          )}
         </Text>
       </>
     )
+  }
+
+  const handleSuccess = async () => {
+    // We have to mark the bet as claimed immediately because it does not update fast enough
+    dispatch(markAsCollected({ [bet.round.epoch]: true }))
+    dispatch(fetchLedgerData({ account, epochs: [bet.round.epoch] }))
   }
 
   return (
@@ -139,20 +168,13 @@ const HistoricalBet: React.FC<BetProps> = ({ bet }) => {
           </Text>
         </Box>
         <YourResult px="24px">{renderBetLabel()}</YourResult>
-        {roundResult === Result.WIN && !claimed && (
-          <CollectWinningsButton
-            onSuccess={handleSuccess}
-            hasClaimed={bet.claimed}
-            epoch={bet.round.epoch}
-            payout={payout}
-            scale="sm"
-            mr="8px"
-          >
+        {roundResult === Result.WIN && canClaim && (
+          <CollectWinningsButton hasClaimed={!canClaim} onSuccess={handleSuccess} scale="sm" mr="8px">
             {t('Collect')}
           </CollectWinningsButton>
         )}
-        {roundResult === Result.CANCELED && !claimed && (
-          <ReclaimPositionButton onSuccess={handleSuccess} epoch={bet.round.epoch} scale="sm" mr="8px">
+        {roundResult === Result.CANCELED && canClaim && (
+          <ReclaimPositionButton epoch={bet.round.epoch} scale="sm" mr="8px">
             {t('Reclaim')}
           </ReclaimPositionButton>
         )}
@@ -162,7 +184,7 @@ const HistoricalBet: React.FC<BetProps> = ({ bet }) => {
           </IconButton>
         )}
       </StyledBet>
-      {isOpen && <BetDetails bet={bet} result={getRoundResult()} />}
+      {isOpen && <BetDetails bet={bet} result={getRoundResult(bet, currentEpoch)} />}
     </>
   )
 }

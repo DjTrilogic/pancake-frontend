@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
+import { useWeb3React } from '@web3-react/core'
 import {
   Modal,
   Text,
@@ -13,16 +14,21 @@ import {
 } from '@pancakeswap/uikit'
 import { useTranslation } from 'contexts/Localization'
 import useTheme from 'hooks/useTheme'
-import { useSousHarvest } from 'hooks/useHarvest'
-import { useSousStake } from 'hooks/useStake'
 import useToast from 'hooks/useToast'
-import { Token } from 'config/constants/types'
+import { ToastDescriptionWithTx } from 'components/Toast'
+import { Token } from '@pancakeswap/sdk'
+import { formatNumber } from 'utils/formatBalance'
+import useCatchTxError from 'hooks/useCatchTxError'
+import { updateUserBalance, updateUserPendingReward, updateUserStakedBalance } from 'state/pools'
+import { useAppDispatch } from 'state'
+import useHarvestPool from '../../../hooks/useHarvestPool'
+import useStakePool from '../../../hooks/useStakePool'
 
 interface CollectModalProps {
   formattedBalance: string
   fullBalance: string
   earningToken: Token
-  earningsDollarValue: string
+  earningsDollarValue: number
   sousId: number
   isBnbPool: boolean
   isCompoundPool?: boolean
@@ -41,10 +47,12 @@ const CollectModal: React.FC<CollectModalProps> = ({
 }) => {
   const { t } = useTranslation()
   const { theme } = useTheme()
-  const { toastSuccess, toastError } = useToast()
-  const { onReward } = useSousHarvest(sousId, isBnbPool)
-  const { onStake } = useSousStake(sousId, isBnbPool)
-  const [pendingTx, setPendingTx] = useState(false)
+  const { toastSuccess } = useToast()
+  const { account } = useWeb3React()
+  const dispatch = useAppDispatch()
+  const { fetchWithCatchTxError, loading: pendingTx } = useCatchTxError()
+  const { onReward } = useHarvestPool(sousId, isBnbPool)
+  const { onStake } = useStakePool(sousId, isBnbPool)
   const [shouldCompound, setShouldCompound] = useState(isCompoundPool)
   const { targetRef, tooltip, tooltipVisible } = useTooltip(
     <>
@@ -55,32 +63,32 @@ const CollectModal: React.FC<CollectModalProps> = ({
   )
 
   const handleHarvestConfirm = async () => {
-    setPendingTx(true)
-    // compounding
-    if (shouldCompound) {
-      try {
-        await onStake(fullBalance, earningToken.decimals)
+    const receipt = await fetchWithCatchTxError(() => {
+      if (shouldCompound) {
+        return onStake(fullBalance, earningToken.decimals)
+      }
+      return onReward()
+    })
+    if (receipt?.status) {
+      if (shouldCompound) {
         toastSuccess(
           `${t('Compounded')}!`,
-          t(`Your ${earningToken.symbol} earnings have been re-invested into the pool!`),
+          <ToastDescriptionWithTx txHash={receipt.transactionHash}>
+            {t('Your %symbol% earnings have been re-invested into the pool!', { symbol: earningToken.symbol })}
+          </ToastDescriptionWithTx>,
         )
-        setPendingTx(false)
-        onDismiss()
-      } catch (e) {
-        toastError(t('Canceled'), t('Please try again and confirm the transaction.'))
-        setPendingTx(false)
+      } else {
+        toastSuccess(
+          `${t('Harvested')}!`,
+          <ToastDescriptionWithTx txHash={receipt.transactionHash}>
+            {t('Your %symbol% earnings have been sent to your wallet!', { symbol: earningToken.symbol })}
+          </ToastDescriptionWithTx>,
+        )
       }
-    } else {
-      // harvesting
-      try {
-        await onReward()
-        toastSuccess(`${t('Harvested')}!`, t(`Your ${earningToken.symbol} earnings have been sent to your wallet!`))
-        setPendingTx(false)
-        onDismiss()
-      } catch (e) {
-        toastError(t('Canceled'), t('Please try again and confirm the transaction.'))
-        setPendingTx(false)
-      }
+      dispatch(updateUserStakedBalance(sousId, account))
+      dispatch(updateUserPendingReward(sousId, account))
+      dispatch(updateUserBalance(sousId, account))
+      onDismiss?.()
     }
   }
 
@@ -114,7 +122,9 @@ const CollectModal: React.FC<CollectModalProps> = ({
           <Heading>
             {formattedBalance} {earningToken.symbol}
           </Heading>
-          <Text fontSize="12px" color="textSubtle">{`~${earningsDollarValue || 0} USD`}</Text>
+          {earningsDollarValue > 0 && (
+            <Text fontSize="12px" color="textSubtle">{`~${formatNumber(earningsDollarValue)} USD`}</Text>
+          )}
         </Flex>
       </Flex>
 
@@ -127,7 +137,7 @@ const CollectModal: React.FC<CollectModalProps> = ({
         {pendingTx ? t('Confirming') : t('Confirm')}
       </Button>
       <Button variant="text" onClick={onDismiss} pb="0px">
-        {t('Close window')}
+        {t('Close Window')}
       </Button>
     </Modal>
   )
